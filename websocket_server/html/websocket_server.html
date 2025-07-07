@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Godot GSI WebSocket Test Client (Simplified)</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: sans-serif;
+            background-color: #1a202c;
+            color: #e2e8f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            background-color: #2d3748;
+            border-radius: 12px;
+            padding: 32px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.4);
+            width: 100%;
+            max-width: 900px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+        h1 {
+            font-size: 1.8em;
+            font-weight: bold;
+            text-align: center;
+            color: #fff;
+        }
+        h2 {
+            font-size: 1.4em;
+            font-weight: bold;
+            margin-bottom: 16px;
+            color: #fff;
+        }
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #a0aec0;
+        }
+        .input-group input[type="text"] {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid #4a5568;
+            border-radius: 8px;
+            background-color: #4a5568;
+            color: #e2e8f0;
+            outline: none;
+        }
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .checkbox-group input[type="checkbox"] {
+            width: auto;
+            margin: 0;
+            transform: scale(1.2);
+        }
+        .checkbox-group label {
+            margin-bottom: 0;
+            font-weight: normal;
+        }
+        .button-group {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+        }
+        .button-group button {
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+        }
+        .button-group button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .connect-btn {
+            background-color: #48bb78;
+            color: white;
+        }
+        .disconnect-btn {
+            background-color: #e53e3e;
+            color: white;
+        }
+        .status-indicator {
+            font-weight: bold;
+            text-align: center;
+            font-size: 1.1em;
+        }
+        .status-indicator.connected {
+            color: #48bb78;
+        }
+        .status-indicator.disconnected {
+            color: #e53e3e;
+        }
+        .status-indicator.connecting {
+            color: #ecc94b;
+        }
+
+        .message-boxes-container {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .message-box-wrapper {
+            flex: 1;
+            min-width: 300px;
+            display: flex;
+            flex-direction: column;
+        }
+        .message-box {
+            background-color: #1a202c;
+            border: 1px solid #4a5568;
+            border-radius: 8px;
+            padding: 16px;
+            font-size: 0.9em;
+            color: #cbd5e0;
+            flex-grow: 1;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .log-message-box {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .data-message-box {
+            max-height: none;
+            overflow-y: visible;
+        }
+
+        .message-box .text-gray-500 {
+            color: #a0aec0;
+        }
+
+        .message-entry {
+            margin-bottom: 8px;
+            padding-bottom: 8px;
+            border-bottom: 1px dashed #4a5568;
+        }
+        .message-entry:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+        .log-message-box .message-entry strong {
+            color: #63b3ed;
+        }
+        .log-message-box .message-entry.error strong {
+            color: #e53e3e;
+        }
+        .log-message-box .message-entry.warning strong {
+            color: #ecc94b;
+        }
+        .data-message-box .received-label strong {
+            color: #48bb78;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Godot GSI WebSocket Test Client</h1>
+
+        <div class="input-group">
+            <label for="websocketUri">WebSocket Server URI:</label>
+            <input type="text" id="websocketUri" value="ws://127.0.0.1:9000">
+        </div>
+
+        <div class="input-group">
+            <label for="authToken">Authentication Token:</label>
+            <input type="text" id="authToken" value="ws_secret_token">
+            <div class="checkbox-group">
+                <input type="checkbox" id="ignoreAuthToken">
+                <label for="ignoreAuthToken">Ignore Auth Token Validation</label>
+            </div>
+        </div>
+
+        <div class="button-group">
+            <button id="connectBtn" class="connect-btn">Connect</button>
+            <button id="disconnectBtn" class="disconnect-btn" disabled>Disconnect</button>
+        </div>
+
+        <div class="status-indicator">
+            Status: <span id="connectionStatus" class="disconnected">Disconnected</span>
+        </div>
+
+        <div class="message-boxes-container">
+            <div class="message-box-wrapper">
+                <h2>Status & Log Messages:</h2>
+                <div id="logMessages" class="message-box log-message-box">
+                    <p class="text-gray-500">No log messages yet.</p>
+                </div>
+            </div>
+
+            <div class="message-box-wrapper">
+                <h2>Received Data:</h2>
+                <div id="dataMessages" class="message-box data-message-box">
+                    <p class="text-gray-500">No data received yet.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const websocketUriInput = document.getElementById('websocketUri');
+        const authTokenInput = document.getElementById('authToken');
+        const ignoreAuthTokenCheckbox = document.getElementById('ignoreAuthToken');
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const connectionStatusSpan = document.getElementById('connectionStatus');
+        const logMessagesDiv = document.getElementById('logMessages');
+        const dataMessagesDiv = document.getElementById('dataMessages');
+
+        let ws = null;
+
+        const RECONNECT_DELAY_MS = 3000;
+        const MAX_RECONNECT_ATTEMPTS = 10;
+        let reconnectAttempts = 0;
+        let reconnectTimeoutId = null;
+
+        function updateStatus(status, className) {
+            connectionStatusSpan.textContent = status;
+            connectionStatusSpan.className = className;
+        }
+
+        function appendLogMessage(type, content) {
+            const messageEntry = document.createElement('div');
+            messageEntry.className = `message-entry ${type}`;
+            const timestamp = new Date().toLocaleTimeString();
+            messageEntry.innerHTML = `<strong>[${timestamp}] ${type.toUpperCase()}:</strong><br>${content}`;
+            
+            if (logMessagesDiv.querySelector('.text-gray-500')) {
+                logMessagesDiv.innerHTML = '';
+            }
+            logMessagesDiv.appendChild(messageEntry);
+            logMessagesDiv.scrollTop = logMessagesDiv.scrollHeight;
+        }
+
+        function setReceivedDataMessage(content) {
+            let displayContent = content;
+            const timestamp = new Date().toLocaleTimeString();
+            let receivedToken = null;
+
+            try {
+                const parsed = JSON.parse(content);
+                displayContent = JSON.stringify(parsed, null, 2);
+                if (parsed.auth && parsed.auth.token) {
+                    receivedToken = parsed.auth.token;
+                }
+            } catch (e) {
+                // displayContent remains raw content
+            }
+
+            dataMessagesDiv.innerHTML = `<pre><span class="received-label"><strong>[${timestamp}] RECEIVED:</strong></span><br>${displayContent}</pre>`;
+            
+            const expectedAuthToken = authTokenInput.value;
+            const ignoreAuth = ignoreAuthTokenCheckbox.checked;
+
+            if (ignoreAuth) return;
+
+            if (receivedToken === null) {
+                appendLogMessage('warning', 'Received data does not contain an authentication token. Cannot validate.');
+                return;
+            }
+            
+            if (receivedToken !== expectedAuthToken) {
+                appendLogMessage('warning', `Authentication Token Mismatch! Expected: '${expectedAuthToken}', Received: '${receivedToken}'. Forced Disconnect.`);
+                disconnectWebSocket(1008, "Authentication token mismatch");
+            }
+        }
+
+        function scheduleReconnect() {
+            clearReconnectTimeout();
+
+            if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+                appendLogMessage('error', `Max reconnect attempts (${MAX_RECONNECT_ATTEMPTS}) reached. Please connect manually.`);
+                updateStatus('Disconnected', 'disconnected');
+                connectBtn.disabled = false;
+                return;
+            }
+            
+            reconnectAttempts++;
+            const currentDelay = RECONNECT_DELAY_MS;
+            appendLogMessage('info', `Attempting to reconnect in ${currentDelay / 1000} seconds (Attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`);
+            updateStatus('Retrying...', 'connecting');
+
+            reconnectTimeoutId = setTimeout(connectWebSocketInternal, currentDelay);
+        }
+
+        function clearReconnectTimeout() {
+            if (reconnectTimeoutId) {
+                clearTimeout(reconnectTimeoutId);
+                reconnectTimeoutId = null;
+            }
+        }
+
+        function connectWebSocketInternal() {
+            const uri = websocketUriInput.value;
+
+            if (!uri) {
+                appendLogMessage('error', 'WebSocket URI cannot be empty.');
+                updateStatus('Disconnected', 'disconnected');
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+                return;
+            }
+
+            appendLogMessage('info', 'Initiating WebSocket connection. Authentication token will be validated upon receiving the first message from the server.');
+
+            try {
+                ws = new WebSocket(uri);
+
+                ws.onopen = () => {
+                    updateStatus('Connected', 'connected');
+                    appendLogMessage('info', `Connected to ${uri}`);
+                    reconnectAttempts = 0;
+                    clearReconnectTimeout();
+                    connectBtn.disabled = true;
+                    disconnectBtn.disabled = false;
+                };
+
+                ws.onmessage = (event) => {
+                    setReceivedDataMessage(event.data);
+                };
+
+                ws.onclose = (event) => {
+                    updateStatus('Disconnected', 'disconnected');
+                    connectBtn.disabled = false;
+                    disconnectBtn.disabled = true;
+                    if (event.wasClean || event.code === 1008) {
+                        appendLogMessage('info', `Disconnected cleanly. Code: ${event.code}, Reason: ${event.reason}`);
+                        reconnectAttempts = 0;
+                        clearReconnectTimeout();
+                        return;
+                    }
+                    appendLogMessage('error', `Connection died unexpectedly. Code: ${event.code}, Reason: ${event.reason}`);
+                    scheduleReconnect();
+                };
+
+                ws.onerror = (error) => {
+                    updateStatus('Error', 'disconnected');
+                    appendLogMessage('error', `WebSocket Error: ${error.message || 'Unknown error'}`);
+                    console.error('WebSocket Error:', error);
+                    ws.close();
+                };
+
+            } catch (e) {
+                updateStatus('Error', 'disconnected');
+                appendLogMessage('error', `Failed to create WebSocket: ${e.message}`);
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+                scheduleReconnect();
+            }
+        }
+
+        function connectWebSocket() {
+            logMessagesDiv.innerHTML = '<p class="text-gray-500">No log messages yet.</p>';
+            dataMessagesDiv.innerHTML = '<p class="text-gray-500">No data received yet.</p>';
+            reconnectAttempts = 0;
+            clearReconnectTimeout();
+            updateStatus('Connecting...', 'connecting');
+            connectBtn.disabled = true;
+            disconnectBtn.disabled = false;
+            connectWebSocketInternal();
+        }
+
+        function disconnectWebSocket(code = 1000, reason = "Client initiated disconnect") {
+            clearReconnectTimeout();
+            reconnectAttempts = 0;
+            ws.close();
+            updateStatus('Disconnected', 'disconnected');
+            connectBtn.disabled = false;
+            disconnectBtn.disabled = true;
+            appendLogMessage('info', `Disconnecting: ${reason} (Code: ${code})...`);
+        }
+
+        connectBtn.addEventListener('click', connectWebSocket);
+        disconnectBtn.addEventListener('click', () => disconnectWebSocket());
+
+        updateStatus('Disconnected', 'disconnected');
+        disconnectBtn.disabled = true;
+    </script>
+</body>
+</html>
